@@ -1,0 +1,17 @@
+#!/bin/bash
+
+for array in /sys/block/md*
+do
+ if [ -e $array/md/mismatch_cnt ]
+ then
+  mismatch=`cat $array/md/mismatch_cnt`
+  if [ "$mismatch" -gt "0" ]
+  then
+   echo "$array has $mismatch mismatched blocks!"
+  fi
+ fi
+ if [ -e $array/md/sync_action ]
+ then
+  echo "check" > $array/md/sync_action
+ fi
+done

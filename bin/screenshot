@@ -1,0 +1,1 @@
+/usr/bin/import -display :0.0 -window root ~/screenshot.jpg

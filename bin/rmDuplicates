@@ -1,0 +1,54 @@
+#!/usr/bin/python
+
+import argparse
+import sys
+import os
+import hashlib
+
+parser = argparse.ArgumentParser(description='Remove duplicate files based on size and md5sum')
+parser.add_argument('paths', metavar='Path', type=str, nargs='+', help='Paths to search')
+parser.add_argument('--delete', dest='delete', action='store_const', const=1, default=0, help='Actually delete')
+parser.add_argument('--trash', dest='trash', action='store_const', const=1, default=0, help='Move to trash (OS X only)')
+args = parser.parse_args()
+
+process = {}
+
+for path in args.paths:
+    for root, dirs, files in os.walk(path):
+        for file in files:
+            file = root+'/'+file
+            size = os.path.getsize(file)
+        # Ignore empty files
+            if size == 0:
+                continue
+        # Add to the list
+            if not size in process:
+                process[size] = []
+            process[size].append(file)
+
+for size in process:
+    files = process[size]
+    if len(files) < 2:
+        continue
+    md5s = {}
+    for file in files:
+        md5 = hashlib.md5()
+        f = open(file, 'rb')
+        while True:
+            data = f.read(128)
+            if not data:
+                break
+            md5.update(data)
+        md5 = md5.digest()
+        f.close()
+        if md5 in md5s:
+            print file+" matches "+md5s[md5]
+            if args.delete:
+                print "Deleting"
+                os.remove(file)
+            elif args.trash:
+                print "Moving to ~/.Trash/"+file
+                os.renames(file, "~/.Trash/"+file);
+
+        else:
+            md5s[md5] = file

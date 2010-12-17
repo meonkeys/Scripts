@@ -1,0 +1,22 @@
+#!/bin/bash
+
+PROCESSES=$(
+cd /proc
+for pid in [0-9]*
+do
+ file="$pid/oom_score"
+ if [ ! -f $file ]
+ then
+  contine
+ fi
+ OOMVAL=`cat $file | tr -d '\n'`
+ if [[ "$OOMVAL" -eq "0" ]]
+ then
+  continue
+ fi
+ PROCESS=`ps -www $pid | tail -n +2 | awk '{ print $5,$6,$7,$8,$9 }'`
+ echo -e "$OOMVAL\t$pid\t$PROCESS"
+done
+)
+
+echo "$PROCESSES" | sort --numeric-sort --reverse | awk '{ print $2,"\t"$3,$4,$5,$6,$7,$8,$9 }'

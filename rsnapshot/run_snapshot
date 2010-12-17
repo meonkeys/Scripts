@@ -1,0 +1,159 @@
+#!/bin/bash
+#     Last Updated: 2007.07.30 (kormoc)
+#
+#  run_snapshot
+#
+#   runs rsnapshot on the rsnapshot-*.conf files in $DIR
+#
+#   Set the configuration variablses below to suit your preferences, and run:
+#
+#       ./run_snapshot
+#
+#   Cron run_snapshot to run every hour or so, and based on your configuration,
+#   it will pick and choose which intervals to run.  This is much better than
+#   setting up separate cron times for each interval because run_snapshot will
+#   run intervals sequentially, for example making sure that "daily" does not
+#   run until "weekly" has finished.
+#
+#   You can also pass in override intervals (including "du") to run specific
+#   intervals manually:
+#
+#       ./run_snapshot du
+#       ./run_snapshot weekly hourly
+#
+
+# Hourly snapshot runs every N hours, starting at HOURLY_MIN and ending at
+# HOURLY_MAX.  Hourly snapshots will always be run at HOURLY_MAX, even if it is
+# not a multiple of HOURLY_N.
+    HOURLY_N=4
+    HOURLY_MIN=8
+    HOURLY_MAX=20
+
+# Daily snapshot runs at hour $DAILY_H
+    DAILY_H=22
+
+# Weekly snapshot runs at hour $DAILY_H on weekday WEEKLY_D (0=Sunday)
+    WEEKLY_D=0
+
+# Monthly snapshot runs at hour $DAILY_H on MONTHLY_D day of the month
+    MONTHLY_D=1
+
+# Directory that holds the snapshot config files
+# If left commented out, we will attempt to find them
+#    DIR=/path/to/snapshots
+
+
+################################################################################
+##     End the of config section.  Don't touch anything below this line.      ##
+################################################################################
+
+# Where are the config files located?
+    for checkdir in "/mnt/snapshots" "/var/snapshots"
+    do
+        if [ ! -d "$DIR" ]
+        then
+            ls $checkdir/rsnapshot-*.conf &> /dev/null
+            if [ $? -eq "0" ]
+            then
+	        DIR="$checkdir"
+            fi
+        fi
+    done
+
+# Didn't find any valid directorys?
+    if [ ! -d "$DIR" ]
+    then
+        echo "Can't find a valid config file directory. Failing..."
+        exit
+    fi
+
+# No intervals passed in, define our own
+    if [ -z "$1" ]; then
+        INTERVALS=""
+    # Get some date/time info
+        hour=`date '+%k'`
+        wday=`date '+%w'`
+        mday=`date '+%d'`
+    # Larger intervals all run at $DAILY_H
+        if [ $hour -eq $DAILY_H ]; then
+        # Monthly
+            if [ $mday -eq $MONTHLY_D ]; then
+                INTERVALS="$INTERVALS monthly"
+            fi
+        # Weekly
+            if [ $wday -eq $WEEKLY_D ]; then
+                INTERVALS="$INTERVALS weekly"
+            fi
+        # Don't forget to add the daily interval
+            INTERVALS="$INTERVALS daily"
+        fi
+    # Hourly, too?
+        if [ $hour -ge $HOURLY_MIN -a $hour -le $HOURLY_MAX ]; then
+        # The % math should catch when $hour is $HOURLY_MIN, too
+            if [ $hour -eq $HOURLY_MAX -o $(( ($hour - $HOURLY_MIN) % $HOURLY_N)) -eq 0 ]; then
+                INTERVALS="$INTERVALS hourly"
+            fi
+        fi
+# Use the supplied intervals instead
+    else
+        INTERVALS="$*"
+    fi
+
+# cd to where we want to go
+    cd "$DIR"
+
+# Run the requested intervals
+    for INT in $INTERVALS; do
+
+        echo "Interval:  $INT"
+
+    # Just doing a du ?
+        if [ "$INT" = "du" ]; then
+            for CONF in rsnapshot-*.conf; do
+            # Get the name of the server this snapshot is for
+                SERV=`echo "$CONF" | sed -e 's/rsnapshot-\(.\+\?\)\.conf/\1/'`
+            # Run the command
+                echo "$SERV:"
+                /usr/bin/rsnapshot -c "$CONF" du
+                echo "";
+            done
+
+    # Scan for which config files use this interval
+        else
+            for CONF in `grep -Pl "^interval\s+$INT\s" rsnapshot-*.conf`; do
+            # Get the name of the server this snapshot is for
+                SERV=`echo "$CONF" | sed -e 's/rsnapshot-\(.\+\?\)\.conf/\1/'`
+            # When did we start?
+                TIME=`date +%s`
+            # Print out a message
+                echo -n "rsnapshot $INT:  $SERV"
+            # Add some smart trailing whitespace to the preferred length
+                LEN=$((20 - `expr length "$INT$SERV"`))
+                for (( i=0; i < "$LEN"; i++ )); do
+                    echo -n " "
+                done
+            # Run the backup
+                /usr/bin/rsnapshot -c "$CONF" "$INT"
+            # How long did it take?
+                TIME=$((`date +%s` - $TIME))
+            # Default times
+                HRS=0
+                MINS=0
+            # Print out a nice final time
+                if [ $TIME -ge 3600 ]; then
+                    HRS=$((($TIME - ($TIME % 3600)) / 3600))
+                    TIME=$(($TIME % 3600))
+                    echo -n "$HRS""h"
+                fi
+                if [ "$TIME" -ge 60 ]; then
+                    MINS=$((($TIME - ($TIME % 60)) / 60))
+                    TIME=$(($TIME % 60))
+                    echo -n "$MINS""m"
+                fi
+                if [ "$TIME" -gt 0 -o "$MINS" -lt 1 ]; then
+                    echo -n "$TIME""s"
+                fi
+                echo ""
+            done
+        fi
+    done

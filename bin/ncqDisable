@@ -1,0 +1,6 @@
+#!/bin/bash
+
+for device in 'sdc' 'sdd' 'sde' 'sdf'
+do
+ echo 1 > /sys/block/$device/device/queue_depth
+done

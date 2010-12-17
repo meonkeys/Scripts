@@ -1,0 +1,35 @@
+#!/usr/bin/env php
+<?php
+	echo "Scanning for php files...\n";
+	$files = explode("\n", trim(shell_exec('find . -type f -name \*.php | grep -v "./cake/tests/"')));
+	$possibleFunctions = array();
+	
+	if (count($files) == 1)
+		exit;
+	
+	echo "Downloading a list of all the php functions from php.net\n";
+	$file = file_get_contents("http://www.php.net/quickref.php");
+	preg_match_all('/\/function\..*">([^<]+)/', $file, $matches);
+	$functions = array_flip($matches[1]);
+	foreach (array('unset', 'return', 'require_once', 'require', 'print', 'mhash', 'main', 'list', 'isset', 'include_once', 'include', 'exit', 'eval', 'empty', 'echo', 'die', 'delete', 'array') AS $keyword)
+		unset($functions[$keyword]);
+	unset($matches, $file);
+
+	foreach ($files as $file) {
+		if (!file_exists($file))
+			continue;
+		echo "Processing $file\n";
+		$file = file_get_contents($file);
+		preg_match_all('/([\w-_]+)\s*\(/US', $file, $matches);
+		foreach($matches[1] as $function)
+			if (isset($functions[$function]))
+				$possibleFunctions[$function] = $function;
+	}
+	
+	sort($possibleFunctions);
+
+	echo "Missing Functions:\n";
+	foreach ($possibleFunctions as $function)
+		if (!function_exists($function))
+			echo "$function()\n";
+	echo "\n\n";

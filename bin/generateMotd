@@ -1,0 +1,47 @@
+#!/bin/bash
+
+filter="cat"
+producer="uname -a"
+
+bold=$'\x1b[0;01m' 
+normal=$'\x1b[0;0m'
+# 30 black 31 red 32 green 33 yellow 34 blue 35 magenta 36 cyan 37 white
+colours=($'\x1b[32;01m' $'\x1b[33;01m' $'\x1b[35;01m' $'\x1b[36;01m') 
+colour=${colours[$(($RANDOM%7))]} 
+marker () { sed "s/^/¹/;s/$/²/"; } 
+colouriser () { sed "s/¹/  $colour/;s/²/$bold  /"; } 
+
+PATH=$PATH:/usr/local/bin
+
+if [ -x "$(which cowsay)" ]
+then
+ for dir in /usr/share/cowsay-3.03/cows/ /usr/local/share/cows/
+ do
+  if [ "$dir" == "." -o "$dir" == ".." ]
+  then
+   continue;
+  fi
+  if [ -d "$dir" ]
+  then
+   cowdir="$dir"
+  fi
+ done
+ cows=($cowdir/*.cow) 
+ modes=("-b" "-d" "-g" "-s" "-t" "-w" "-y" "")
+ until [ -f "$cow" ]
+ do
+  cow=${cows[$(($RANDOM%${#cows}))]};
+ done
+ filter="cowsay -f $cow ${modes[$(($RANDOM%${#modes}))]} -n" 
+fi
+
+if [ -x "$(which fortune)" ]
+then 
+ producer="fortune"
+fi
+
+( 
+ echo $bold 
+ $producer | fold -s -w 72 | marker | $filter | colouriser 
+ echo $normal 
+) > /etc/motd

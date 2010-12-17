@@ -1,0 +1,2 @@
+#!/bin/bash
+mysqldump --all-databases --add-drop-database --add-drop-table --add-locks --allow-keywords --comments --complete-insert --extended-insert --flush-privileges --lock-all-tables --quick --routines --set-charset --triggers > "/mnt/backup/mysql/`hostname`/`date "+%F %T"`.sql"

@@ -1,0 +1,8 @@
+#!/bin/bash
+for drive in sda sdb sdc sdd sde sdf
+do
+ if [ -b "/dev/$drive" ]
+ then
+  /sbin/badblocks "/dev/$drive"
+ fi
+done

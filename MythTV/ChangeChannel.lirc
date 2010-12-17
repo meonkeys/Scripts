@@ -1,0 +1,15 @@
+#!/bin/bash
+REMOTE_NAME=DirecTV_RC64
+INTERDIGIT_DELAY="1"
+
+# Hack to reset the tuner to the proper input
+#ivtv-tune -c 4 &
+
+for digit in $(echo $1 | sed -e 's/./& /g')
+do
+ irsend SEND_ONCE $REMOTE_NAME KEY_$digit 
+ # note, you may have to tweak the interdigit delay up a bit
+ sleep $INTERDIGIT_DELAY
+done 
+irsend SEND_ONCE $REMOTE_NAME KEY_SELECT
+

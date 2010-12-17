@@ -1,0 +1,13 @@
+#!/bin/bash
+REMOTE_NAME=3100
+
+# Hack to reset the tuner to the proper input
+ivtv-tune -c 4 &
+
+for digit in $(echo $1 | sed -e 's/./& /g')
+do 
+ irsend SEND_ONCE $REMOTE_NAME $digit 
+ # note, you may have to tweak the interdigit delay up a bit
+ sleep 0.4
+done 
+irsend SEND_ONCE $REMOTE_NAME select

@@ -1,0 +1,5 @@
+#!/bin/bash
+LOGFILE="/var/log/`basename $0`.log"
+echo -e "$(date)\n$SMARTD_MESSAGE\n" >> "$LOGFILE"
+echo -e "Subject: [SMARTD] $SMARTD_DEVICESTRING - $SMARTD_FAILTYPE - $SMARTD_MESSAGE \n\n$SMARTD_FULLMESSAGE\n" | sendmail kormoc
+#shutdown -h now
