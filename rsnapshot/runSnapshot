@@ -1,9 +1,10 @@
 #!/bin/bash
-#     Last Updated: 2007.07.30 (kormoc)
+#     Last Updated: 2011.11.21 (kormoc [at] gmail [dotta] com)
 #
 #  run_snapshot
 #
-#   runs rsnapshot on the rsnapshot-*.conf files in $DIR
+#   runs rsnapshot on the rsnapshot-*.conf files in $DIR or in other 'standard'
+#   dirs
 #
 #   Set the configuration variablses below to suit your preferences, and run:
 #
@@ -42,13 +43,27 @@
 # If left commented out, we will attempt to find them
 #    DIR=/path/to/snapshots
 
+# Retrys to attempt if rsnapshot fails for some reason
+RETRY_ATTEMPTS=2
+
+# Niceness level to run at. This only affects this side of the connection.
+NICENESS=5
 
 ################################################################################
 ##     End the of config section.  Don't touch anything below this line.      ##
 ################################################################################
 
+# Renice thyself
+renice $NICENESS $$ &> /dev/null
+
+# Get the absolute path of the script to also check for conf files
+pushd `pwd` &> /dev/null
+cd `dirname $0`
+abspath=`pwd`
+popd &> /dev/null
+
 # Where are the config files located?
-    for checkdir in "/mnt/snapshots" "/var/snapshots"
+    for checkdir in `pwd` "$abspath" "/mnt/snapshots" "/var/snapshots"
     do
         if [ ! -d "$DIR" ]
         then
@@ -118,9 +133,39 @@
                 echo "";
             done
 
+    # Diff?
+        elif [ "$INT" = "diff" ]; then
+            for CONF in `grep -Pl "^retain\s+daily\s" rsnapshot-*.conf`; do
+            # Get the name of the server this snapshot is for
+                SERV=`echo "$CONF" | sed -e 's/rsnapshot-\(.\+\?\)\.conf/\1/'`
+                RPATH=`grep snapshot_root "${CONF}" | awk '{ print $2 }'`
+                A=`find $RPATH -maxdepth 1 -type d -name daily.\* -mtime -3 | sort | head -n 2 | head -n 1`
+                B=`find $RPATH -maxdepth 1 -type d -name daily.\* -mtime -3 | sort | head -n 2 | tail -n 1`
+                AP=`echo ${A} | awk -F/ '{ print $NF }'`
+                BP=`echo ${B} | awk -F/ '{ print $NF }'`
+
+            # Run the command
+                echo "$SERV ($AP $BP):"
+                /usr/bin/rsnapshot-diff -v $A $B | egrep '^[-\+ ]+' | sort | sed -e "s#${A}##g" -e "s#${B}##g" > /tmp/runSnapshot.diff
+                for path in `grep -e '^- ' /tmp/runSnapshot.diff | awk '{ print $2 }'`
+                do
+                    grep -e "^+ ${path}$" /tmp/runSnapshot.diff &> /dev/null
+                    if [ "$?" -eq "0" ]
+                    then
+                        sed -i'' -e "s#^+ ${path}#C ${path}#g" -e "s#^- ${path}##g" /tmp/runSnapshot.diff
+                    fi
+                done
+                sed -i'' -e 's#^-#D#g' -e 's#^+#A#g' /tmp/runSnapshot.diff
+                sed -i'' ':a;N;$!ba;s/\n[\n\ \t\r\n\f]\+/\n/g' /tmp/runSnapshot.diff
+                sed -i'' -e 's/^+ /+  /g' -e 's/^- / - /g' /tmp/runSnapshot.diff
+                cat /tmp/runSnapshot.diff | tail -n 100
+                echo ""
+                rm /tmp/runSnapshot.diff
+            done
+
     # Scan for which config files use this interval
         else
-            for CONF in `grep -Pl "^interval\s+$INT\s" rsnapshot-*.conf`; do
+            for CONF in `grep -Pl "^retain\s+$INT\s" rsnapshot-*.conf`; do
             # Get the name of the server this snapshot is for
                 SERV=`echo "$CONF" | sed -e 's/rsnapshot-\(.\+\?\)\.conf/\1/'`
             # When did we start?
@@ -128,12 +173,25 @@
             # Print out a message
                 echo -n "rsnapshot $INT:  $SERV"
             # Add some smart trailing whitespace to the preferred length
-                LEN=$((20 - `expr length "$INT$SERV"`))
+                LEN=$((40 - `expr length "$INT$SERV"`))
                 for (( i=0; i < "$LEN"; i++ )); do
                     echo -n " "
                 done
-            # Run the backup
-                /usr/bin/rsnapshot -c "$CONF" "$INT"
+            # Run the backup and retry if needed
+                attempt=0
+                while [ "$attempt" -lt "$RETRY_ATTEMPTS" ]
+                do
+                 let attempt=$attempt+1
+                 /usr/bin/rsnapshot -c "$CONF" "$INT"
+                 if [ "$?" -eq 0 ]
+                 then
+                  break
+                 fi
+                done
+                if [ "$attempt" -eq "$RETRY_ATTEMPTS" ]
+                then
+                 echo "Rsync failed after $attempt trys"
+                fi
             # How long did it take?
                 TIME=$((`date +%s` - $TIME))
             # Default times
